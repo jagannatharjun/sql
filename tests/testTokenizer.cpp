@@ -1,6 +1,15 @@
 #include <gtest/gtest.h>
-#include "../src/include/sql/tokenizer.hpp"
+#include <sql/tokenizer.hpp>
 #include <utility>
+
+sql::tokens getAllTokens(sql::string str) {
+	sql::tokenizer Tokenizer(str);
+	sql::tokenizer::token Token;
+	sql::tokens Tokens;
+	while ((Token = Tokenizer.next()).second != sql::tokenizer::TokenType::None)
+		Tokens.push_back(std::move(Token));
+	return Tokens;
+}
 
 TEST(testTokenizer, normalTest) {
 	sql::tokenizer Tokenizer("CREATE DATABASE BCA2");
@@ -69,4 +78,14 @@ TEST(testTokenizer, tokensWithSymbols) {
 	expect_token({ ")", TokenType::Symbol });
 	expect_token({ "", TokenType::None });
 
+}
+
+TEST(testTokenizer, testFunctionFinding) {
+	auto t = getAllTokens("Values('Hello')");
+	int  c = 0;
+	auto f = sql::function_token(t,&c);
+	ASSERT_EQ(c, 3);
+	ASSERT_EQ(f.Args.size(), 1);
+	ASSERT_EQ(f.Args.front().first, "Hello");
+	ASSERT_EQ(f.Name, "Values");
 }

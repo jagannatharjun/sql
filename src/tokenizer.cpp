@@ -36,27 +36,30 @@ bool isValidSymbolToken(char c) {
 	return c == '(' || c == ')';
 }
 
-void RemoveExtraSeprators(int i,sql::string& s) {
+void RemoveExtraSeprators(int i, sql::string & s) {
 	if (i < s.size()) {
 		if (s[i] == ' ') {
 			i++;
-			while(i < s.size() && s[i] == ' ')
-				s.erase(i,1);
-			RemoveExtraSeprators(i,s);
-		} else if (s[i] == ',') {
+			while (i < s.size() && s[i] == ' ')
+				s.erase(i, 1);
+			RemoveExtraSeprators(i, s);
+		}
+		else if (s[i] == ',') {
 			if (s[i - 1] == ' ')
-				s.erase(--i,1); // commas pos will decrease
+				s.erase(--i, 1); // commas pos will decrease
 			i++;
-			while(i < s.size() && s[i] == ' ') {
-				s.erase(i,1);
+			while (i < s.size() && s[i] == ' ') {
+				s.erase(i, 1);
 			}
-			RemoveExtraSeprators(i,s);
-		} else if (s[i] == '\'' || s[i] == '\"') {
+			RemoveExtraSeprators(i, s);
+		}
+		else if (s[i] == '\'' || s[i] == '\"') {
 			auto c = s[i++];
-			while(i != s.size() && s[i++] != c);
-			RemoveExtraSeprators(i,s);
-		} else 
-			RemoveExtraSeprators(i+1,s);
+			while (i != s.size() && s[i++] != c);
+			RemoveExtraSeprators(i, s);
+		}
+		else
+			RemoveExtraSeprators(i + 1, s);
 	}
 }
 
@@ -64,8 +67,8 @@ sql::tokenizer::tokenizer(sql::string _TokenStream) :
 	TokenStream_{ std::move(_TokenStream) }
 {
 	trim(TokenStream_);
-	RemoveExtraSeprators(0,TokenStream_);
-	
+	RemoveExtraSeprators(0, TokenStream_);
+
 	// reverse "TokenStream" so that it can be used as a "stack"
 	std::reverse(TokenStream_.begin(), TokenStream_.end());
 }
@@ -75,53 +78,104 @@ sql::string reverse(sql::string s) {
 	return s;
 }
 
+sql::tokenizer::TokenType sql::tokenizer::peekTokenType() {
+	if (TokenStream_.empty())
+		return TokenType::None;
+	auto StartToken = TokenStream_.back();
+
+	if (isValidSymbolToken(StartToken))
+		return TokenType::Symbol;
+	if (StartToken == '\'' || StartToken == '\"')
+		return TokenType::StringLiteral;
+	if (std::isdigit(StartToken))
+		return TokenType::Number;
+	if (std::isalpha(StartToken) || StartToken == '_')
+		return TokenType::Identifier;
+
+	return TokenType::None;
+}
+
 std::pair<sql::string, sql::tokenizer::TokenType> sql::tokenizer::next()
 {
 	if (TokenStream_.empty())
 		return { sql::string{}, TokenType::None };
-	
+
 	sql::string Token;
 	TokenType Type = TokenType::Symbol;
 	char CurrentChar = pop_back(TokenStream_);
 	if (isSeparator(CurrentChar))
-		throw sql::sql_exception{"Superflous seperators"};
+		throw sql::sql_exception{ "Superflous seperators" };
 	if (isValidSymbolToken(CurrentChar)) {
-		return {sql::string(1,CurrentChar), Type};
+		return { sql::string(1,CurrentChar), Type };
 	}
 	if (CurrentChar == '\'' || CurrentChar == '\"') {
 		Type = TokenType::StringLiteral;
 		char StringChar;
 		if (TokenStream_.empty()) {
-				throw sql::sql_exception{"unending StringLiteral"};
-			}
-		while((StringChar = pop_back(TokenStream_)) != CurrentChar) {
+			throw sql::sql_exception{ "unending StringLiteral" };
+		}
+		while ((StringChar = pop_back(TokenStream_)) != CurrentChar) {
 			if (TokenStream_.empty()) {
-				throw sql::sql_exception{"unending StringLiteral"};
+				throw sql::sql_exception{ "unending StringLiteral" };
 			}
 			Token += StringChar;
 		}
 		if (TokenStream_.size() && isSeparator(TokenStream_.back()))
 			TokenStream_.pop_back(); // ignore the following seperator if exists
-		return {Token, Type};
+		return { Token, Type };
 	}
-	
+
 	Type = std::isdigit(CurrentChar) ? TokenType::Number : TokenType::Identifier;
 	if (Type == TokenType::Identifier && !std::isalpha(CurrentChar) && CurrentChar != '_')
-		throw sql::sql_exception{"Invalid Start of Identifier"};
+		throw sql::sql_exception{ "Invalid Start of Identifier" };
 	Token.push_back(CurrentChar);
-	while(TokenStream_.size() && !isSeparator(CurrentChar = pop_back(TokenStream_))) {
+	while (TokenStream_.size() && !isSeparator(CurrentChar = pop_back(TokenStream_))) {
 		if (isValidSymbolToken(CurrentChar)) {
 			TokenStream_.push_back(CurrentChar);
 			break;
 		}
 		Token.push_back(CurrentChar);
 		if (Type == TokenType::Identifier && !std::isalnum(CurrentChar) && CurrentChar != '_') {
-			throw sql::sql_exception{"Invalid Character in Potential Identifier \"" + reverse(TokenStream_) + Token + "\""};
-		} else if (Type == TokenType::Number && !std::isdigit(CurrentChar)) {
-			throw sql::sql_exception{"Invalid Integer"};
+			throw sql::sql_exception{ "Invalid Character in Potential Identifier \"" + reverse(TokenStream_) + Token + "\"" };
 		}
-		
+		else if (Type == TokenType::Number && !std::isdigit(CurrentChar)) {
+			throw sql::sql_exception{ "Invalid Integer" };
+		}
 	}
-	return {Token,Type};
-	
+	return { Token,Type };
+
+}
+
+sql::function_token::function_token(const tokens & Tokens, int* ProcessedTokensCount)
+{
+	int _OwnProcessedTokenCount = 0;
+	if (!ProcessedTokensCount)
+		ProcessedTokensCount = &_OwnProcessedTokenCount;
+	int& tc = *ProcessedTokensCount;
+
+#define ___GetToken() ((Tokens[tc]).first)
+#define ___GetTokenType() ((Tokens[tc]).second)
+
+	if (___GetTokenType() == tokenizer::TokenType::Identifier) {
+		Name = ___GetToken();
+		if (++tc == Tokens.size())
+			return;
+		if (___GetToken() != "(") {
+			return;
+		}
+		++tc;
+		int RequiredClosingBracesCount = 1;
+		while (tc != Tokens.size()) {
+			auto& t = ___GetToken();
+			if (t == ")" && !--RequiredClosingBracesCount) // short-circuting
+				break;
+			else if (t == "(")
+				RequiredClosingBracesCount++;
+			Args.push_back(Tokens[tc++]);
+		}
+		if (tc == Tokens.size())
+			throw sql_exception("function call doesn't contain closing ')'");
+
+	}
+
 }

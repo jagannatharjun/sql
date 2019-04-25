@@ -1,0 +1,5 @@
+
+#Database Design
+attribute
+tuple(collection of attributes)
+table(unordered set of tuple)

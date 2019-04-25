@@ -31,6 +31,12 @@ namespace sql {
 	static inline std::string toStdString(const sql::string& Str) {
 		return std::string(Str.data(), Str.size());
 	}
+
+	static inline sql::string quoted(sql::string str) {
+		str.insert(0, 1, '\"');
+		str.push_back('\"');
+		return str;
+	}
 }
 
 #endif
