@@ -15,21 +15,13 @@ TEST(testDataType, test) {
 	}
 
 	{
-		auto testDataWithArg = [&](const char* DataTypeName, const char* TokenString, std::vector<sql::string> validData) {
-			sql::data_type::args_type args;
-			auto ts = sql::tokenizer(TokenString);
-			while (1) {
-				auto t = ts.next();
-				if (t.second == sql::tokenizer::TokenType::None)
-					break;
-				args.push_back(std::move(t));
-			}
-			auto d = sql::getDataType(DataTypeName, args);
-			for (const auto& data : validData)
-				ASSERT_TRUE(d->isValidData(data));
-		};
-
-		testDataWithArg("varchar", "1", { "", "a", "b" });
+		auto t = sql::getAllTokens("varchar(1)");
+		sql::function_token fs(t);
+		auto d = sql::getDataType(fs.Name, fs.Args);
+		ASSERT_TRUE(d);
+		ASSERT_TRUE(d->isValidData("a"));
+		ASSERT_TRUE(d->isValidData("^"));
+		ASSERT_FALSE(d->isValidData("^ffff"));
 	}
 
 }

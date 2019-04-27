@@ -6,10 +6,13 @@
 #include <vector>
 
 namespace sql {
+void registerKeyword(const sql::string& s);
+bool isKeyword(const sql::string& s);
+
 class tokenizer {
 public:
 	enum class TokenType {
-		None, Symbol, Number, Identifier, StringLiteral
+		None, Symbol, Number, Identifier, StringLiteral, Keyword
 	};
 	using token = std::pair<sql::string, TokenType>;
 
@@ -22,12 +25,18 @@ private:
 };
 using tokens = std::vector<tokenizer::token>;
 
+tokens getAllTokens(sql::string TokenStream);
+
 struct function_token {
 	sql::string Name; //function-name, should be a valid identifier
-	tokens Args;
+	std::vector<tokens> Args; // an Argument can contain multiple identifier
 	// Tokenize "Tokens" in range from Tokens[*ProcessedTokenCount] until end of function ')' if function name is followed by ')'
 	// at end Tokens[*ProcessedTokensCount] is last token scanned
 	function_token(const tokens& Tokens, int* ProcessedTokensCount = nullptr);
+private:
+	bool isValidFunctionName(const tokenizer::token& Token) {
+		return Token.second == tokenizer::TokenType::Identifier || Token.second == tokenizer::TokenType::Keyword;
+	}
 };
 
 }

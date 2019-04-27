@@ -18,7 +18,7 @@ function(ADD_SQL_TEST)
 	cmake_parse_arguments(SQL_TEST_ARGS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 	add_executable(${SQL_TEST_ARGS_NAME} ${SQL_TEST_ARGS_TARGETS})
 	target_link_libraries(${SQL_TEST_ARGS_NAME} gtest gtest_main sql)
-	add_test(${SQL_TEST_ARGS_NAME} ${SQL_TEST_ARGS_NAME})
+	add_test(NAME ${SQL_TEST_ARGS_NAME} COMMAND ${SQL_TEST_ARGS_NAME})
 	set_property(TARGET ${SQL_TEST_ARGS_NAME} PROPERTY CXX_STANDARD 17 )
 endfunction()
 

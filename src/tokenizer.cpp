@@ -3,10 +3,11 @@
 #include <algorithm>
 #include <cctype>
 #include <array>
+#include <unordered_set>
 
 //const static std::array<char, 2> separators = { ' ', ',' };
 int isSeparator(char c) {
-	return c == ' ' || c == ',';
+	return c == ' ';
 	//return std::find(separators.begin(), separators.end(), c) != separators.end();
 }
 
@@ -33,7 +34,7 @@ bool isValidIdentifier(const sql::string & s) {
 }
 
 bool isValidSymbolToken(char c) {
-	return c == '(' || c == ')';
+	return c == '(' || c == ')' || c == ',';
 }
 
 void RemoveExtraSeprators(int i, sql::string & s) {
@@ -43,29 +44,25 @@ void RemoveExtraSeprators(int i, sql::string & s) {
 			while (i < s.size() && s[i] == ' ')
 				s.erase(i, 1);
 			RemoveExtraSeprators(i, s);
-		}
-		else if (s[i] == ',') {
-			if (s[i - 1] == ' ')
+		} else if (isValidSymbolToken(s[i])) {
+			if (i != 0 && s[i - 1] == ' ')
 				s.erase(--i, 1); // commas pos will decrease
 			i++;
 			while (i < s.size() && s[i] == ' ') {
 				s.erase(i, 1);
 			}
 			RemoveExtraSeprators(i, s);
-		}
-		else if (s[i] == '\'' || s[i] == '\"') {
+		} else if (s[i] == '\'' || s[i] == '\"') {
 			auto c = s[i++];
 			while (i != s.size() && s[i++] != c);
 			RemoveExtraSeprators(i, s);
-		}
-		else
+		} else
 			RemoveExtraSeprators(i + 1, s);
 	}
 }
 
 sql::tokenizer::tokenizer(sql::string _TokenStream) :
-	TokenStream_{ std::move(_TokenStream) }
-{
+	TokenStream_{ std::move(_TokenStream) } {
 	trim(TokenStream_);
 	RemoveExtraSeprators(0, TokenStream_);
 
@@ -95,8 +92,7 @@ sql::tokenizer::TokenType sql::tokenizer::peekTokenType() {
 	return TokenType::None;
 }
 
-std::pair<sql::string, sql::tokenizer::TokenType> sql::tokenizer::next()
-{
+std::pair<sql::string, sql::tokenizer::TokenType> sql::tokenizer::next() {
 	if (TokenStream_.empty())
 		return { sql::string{}, TokenType::None };
 
@@ -137,17 +133,17 @@ std::pair<sql::string, sql::tokenizer::TokenType> sql::tokenizer::next()
 		Token.push_back(CurrentChar);
 		if (Type == TokenType::Identifier && !std::isalnum(CurrentChar) && CurrentChar != '_') {
 			throw sql::sql_exception{ "Invalid Character in Potential Identifier \"" + reverse(TokenStream_) + Token + "\"" };
-		}
-		else if (Type == TokenType::Number && !std::isdigit(CurrentChar)) {
+		} else if (Type == TokenType::Number && !std::isdigit(CurrentChar)) {
 			throw sql::sql_exception{ "Invalid Integer" };
 		}
 	}
+	if (Type == TokenType::Identifier && isKeyword(Token))
+		Type = TokenType::Keyword;
 	return { Token,Type };
 
 }
 
-sql::function_token::function_token(const tokens & Tokens, int* ProcessedTokensCount)
-{
+sql::function_token::function_token(const tokens & Tokens, int* ProcessedTokensCount) {
 	int _OwnProcessedTokenCount = 0;
 	if (!ProcessedTokensCount)
 		ProcessedTokensCount = &_OwnProcessedTokenCount;
@@ -156,7 +152,7 @@ sql::function_token::function_token(const tokens & Tokens, int* ProcessedTokensC
 #define ___GetToken() ((Tokens[tc]).first)
 #define ___GetTokenType() ((Tokens[tc]).second)
 
-	if (___GetTokenType() == tokenizer::TokenType::Identifier) {
+	if (isValidFunctionName(Tokens[tc])) {
 		Name = ___GetToken();
 		if (++tc == Tokens.size())
 			return;
@@ -165,17 +161,64 @@ sql::function_token::function_token(const tokens & Tokens, int* ProcessedTokensC
 		}
 		++tc;
 		int RequiredClosingBracesCount = 1;
+		Args.emplace_back();
 		while (tc != Tokens.size()) {
 			auto& t = ___GetToken();
 			if (t == ")" && !--RequiredClosingBracesCount) // short-circuting
 				break;
 			else if (t == "(")
 				RequiredClosingBracesCount++;
-			Args.push_back(Tokens[tc++]);
+			if (RequiredClosingBracesCount == 1 && ___GetToken() == ",") {
+				tc++;
+				Args.emplace_back();
+				continue;
+			}
+			Args.back().emplace_back(Tokens[tc++]);
 		}
 		if (tc == Tokens.size())
 			throw sql_exception("function call doesn't contain closing ')'");
+		if (Args.back().empty())
+			Args.pop_back();
 
 	}
 
+}
+
+static std::unordered_set<sql::string, sql::string_hash> Keywords_;
+struct _KeywordRegistararClass {
+	_KeywordRegistararClass() {
+		puts("hello world");
+		using namespace sql;
+		auto rk = [](auto... k) {
+			((registerKeyword(k)), ...);
+		};
+		rk("add", "constraint", "alter", "column", "table",
+			"all", "and", "as", "Asc", "backup", "database",
+			"between", "case", "check", "column", "constraint",
+			"Create", "database", "index", "Or", "Replace",
+			"View", "table", "Procedure", "Index", "Unique",
+			"View", "Default", "Delete", "Desc", "Distinct",
+			"Drop", "Column", "Exec", "Exists", "Foreign",
+			"Key", "Primary", "Not", "Null", "Full", "Outer",
+			"Join", "Group", "By", "Inner", "Having", "In",
+			"insert", "into", "Select", "is", "like", "order", "Values");
+	}
+} RegisterKeyword;
+
+void sql::registerKeyword(const sql::string & s) {
+	Keywords_.insert(s);
+}
+
+bool sql::isKeyword(const sql::string & s) {
+	return Keywords_.count(s);
+}
+
+sql::tokens sql::getAllTokens(sql::string TokenStream) {
+	sql::tokenizer Tokenizer(std::move(TokenStream));
+	sql::tokenizer::token Token;
+	sql::tokens Tokens;
+	while ((Token = Tokenizer.next()).second != sql::tokenizer::TokenType::None)
+		Tokens.push_back(std::move(Token));
+	return Tokens;
+	
 }

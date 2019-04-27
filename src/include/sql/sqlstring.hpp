@@ -2,6 +2,7 @@
 #define SQL_STRING_HPP
 
 #include <string>
+#include <string_view>
 
 namespace sql {
 	namespace detail {
@@ -32,11 +33,32 @@ namespace sql {
 		return std::string(Str.data(), Str.size());
 	}
 
+	static inline string toUpper(string str) {
+		for (auto& c : str)
+			c = std::toupper(c);
+		return str;
+	}
+
 	static inline sql::string quoted(sql::string str) {
 		str.insert(0, 1, '\"');
 		str.push_back('\"');
 		return str;
 	}
+
+	struct string_hash {
+		size_t operator()(const sql::string& s) const {
+			const int p = 31;
+			const int m = static_cast<int>(1e9) + 9;
+			size_t hash_value = 0;
+			long long p_pow = 1;
+			for (char c : s) {
+				hash_value = (hash_value + (std::tolower(c) - 'a' + 1) * p_pow) % m;
+				p_pow = (p_pow * p) % m;
+			}
+			return hash_value;
+		}
+	};
 }
+
 
 #endif

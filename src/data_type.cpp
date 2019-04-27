@@ -1,6 +1,7 @@
 #include "include\sql\data_type.hpp"
 #include "include/sql/sqlerror.hpp"
 #include <array>
+#include <algorithm>
 
 namespace {
 
@@ -13,8 +14,7 @@ public:
 		return (*(static_cast<NameProvider*>(this)))();
 	}
 
-	virtual bool isValidData(const value_type& data_type) override
-	{
+	virtual bool isValidData(const value_type& data_type) override {
 		return (*static_cast<DataValidator*>(this))(data_type);
 	}
 
@@ -25,38 +25,32 @@ public:
 
 template<typename DataValidator, typename NameProvider>
 std::unique_ptr<sql::data_type> makeDataType(DataValidator&& d, NameProvider&& n) {
-	return std::unique_ptr<sql::data_type>(new lambda_data_type<DataValidator,NameProvider>(std::move(d), std::move(n)));
+	return std::unique_ptr<sql::data_type>(new lambda_data_type<DataValidator, NameProvider>(std::move(d), std::move(n)));
 }
 
 class sql_string : public sql::data_type {
 public:
 	// Inherited via data_type
-	virtual std::vector<sql::string> names() override
-	{
+	virtual std::vector<sql::string> names() override {
 		return { "varchar" };
 	}
-	virtual bool isValidData(const value_type& value) override
-	{
+	virtual bool isValidData(const value_type& value) override {
 		if (value.size() > max_len)
 			return false;
 		return true;
 	}
-	virtual std::unique_ptr<data_type> clone(const args_type& t) override
-	{
+	virtual std::unique_ptr<data_type> clone(const args_type& t) override {
 		auto p = std::make_unique<sql_string>();
-		p->max_len = 0xffffffff;
+		p->max_len = max_len;
 		if (t.size()) {
-			if (t.size() != 1)
-				throw sql::sql_exception("Too Many Arguments for varchar creation");
-			const auto& arg = t.front();
-			if (arg.second != sql::tokenizer::TokenType::Number)
-				throw sql::sql_exception("Invalid Argument for varchar creation " + sql::quoted(arg.first));
-			max_len = std::atoi(arg.first.c_str());
+			if (t.size() != 1 || t.front().size() != 1)
+				throw sql::sql_exception{ "too many arguments for string creation" };
+			p->max_len = std::atoi(t.front().front().first.c_str());
 		}
 		return p;
 	}
 private:
-	int max_len;
+	int max_len = 0xffffffff;
 };
 
 class data_type_provider {
@@ -90,8 +84,7 @@ private:
 
 }
 
-std::unique_ptr<sql::data_type> sql::getDataType(const sql::string& DataTypeName, const sql::data_type::args_type& Args)
-{
+std::unique_ptr<sql::data_type> sql::getDataType(const sql::string& DataTypeName, const sql::data_type::args_type& Args) {
 	static data_type_provider dtp;
 	return dtp.get(DataTypeName, Args);
 }

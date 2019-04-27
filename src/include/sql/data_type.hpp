@@ -10,7 +10,7 @@ namespace sql {
 	class data_type {
 	public:
 		using value_type = sql::string;
-		using args_type = tokens;
+		using args_type = std::vector<tokens>;
 		virtual std::vector<sql::string> names() = 0;
 		virtual bool isValidData(const value_type&) = 0;
 		virtual std::unique_ptr<data_type> clone(const args_type&) = 0;
