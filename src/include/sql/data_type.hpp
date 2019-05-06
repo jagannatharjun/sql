@@ -14,6 +14,7 @@ namespace sql {
 		virtual std::vector<sql::string> names() = 0;
 		virtual bool isValidData(const value_type&) = 0;
 		virtual std::unique_ptr<data_type> clone(const args_type&) = 0;
+		virtual ~data_type() = default;
 	};
 
 
